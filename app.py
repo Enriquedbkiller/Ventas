@@ -46,7 +46,6 @@ def load_data(file_name):
   if "División" in df.columns:
     df = df[df["División"] != "Total general"]
 
-  # Forzar la conversión estricta a numérico de las columnas de ventas y unidades
   for col in df.columns:
     if any(
         kw in col.lower()
@@ -414,11 +413,18 @@ elif modulo_principal == "Clientes y Ticket Promedio":
       return [""] * len(row)
 
 
-    styled_cli = (
-        df_clientes_view.style.format(fmt_cli)
-        .applymap(color_neg, subset=["Var $ (Clientes)", "Var % (Clientes)"])
-        .apply(highlight_last_row, axis=1)
+    styled_cli = df_clientes_view.style.format(fmt_cli).apply(
+        highlight_last_row, axis=1
     )
+    try:
+      styled_cli = styled_cli.map(
+          color_neg, subset=["Var $ (Clientes)", "Var % (Clientes)"]
+      )
+    except AttributeError:
+      styled_cli = styled_cli.applymap(
+          color_neg, subset=["Var $ (Clientes)", "Var % (Clientes)"]
+      )
+
     st.dataframe(styled_cli, use_container_width=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -479,11 +485,18 @@ elif modulo_principal == "Clientes y Ticket Promedio":
       return [""] * len(row)
 
 
-    styled_tic = (
-        df_ticket_view.style.format(fmt_tic)
-        .applymap(color_neg, subset=["Var $ (Ticket)", "Var % (Ticket)"])
-        .apply(highlight_last_row_tic, axis=1)
+    styled_tic = df_ticket_view.style.format(fmt_tic).apply(
+        highlight_last_row_tic, axis=1
     )
+    try:
+      styled_tic = styled_tic.map(
+          color_neg, subset=["Var $ (Ticket)", "Var % (Ticket)"]
+      )
+    except AttributeError:
+      styled_tic = styled_tic.applymap(
+          color_neg, subset=["Var $ (Ticket)", "Var % (Ticket)"]
+      )
+
     st.dataframe(styled_tic, use_container_width=True)
 
 else:
@@ -734,9 +747,16 @@ else:
       return ""
 
     cols_to_colorize = ["Var $", "Var %"]
-    styled_df = df_grouped.style.format(format_dict).applymap(
-        color_negative_red, subset=cols_to_colorize
-    )
+    try:
+      styled_df = (
+          df_grouped.style.format(format_dict)
+          .map(color_negative_red, subset=cols_to_colorize)
+      )
+    except AttributeError:
+      styled_df = (
+          df_grouped.style.format(format_dict)
+          .applymap(color_negative_red, subset=cols_to_colorize)
+      )
 
     st.subheader(titulo_tabla)
     st.dataframe(styled_df, use_container_width=True)
