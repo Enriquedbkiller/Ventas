@@ -46,6 +46,7 @@ def load_data(file_name):
   if "División" in df.columns:
     df = df[df["División"] != "Total general"]
 
+  # Forzar la conversión estricta a numérico de las columnas de ventas y unidades
   for col in df.columns:
     if any(
         kw in col.lower()
@@ -58,17 +59,14 @@ def load_data(file_name):
             "ticket",
         ]
     ):
-      if df[col].dtype == object:
-        df[col] = (
-            df[col]
-            .astype(str)
-            .str.replace("$", "", regex=False)
-            .str.replace(",", "", regex=False)
-            .str.strip()
-        )
-        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
-      else:
-        df[col] = df[col].fillna(0)
+      df[col] = (
+          df[col]
+          .astype(str)
+          .str.replace("$", "", regex=False)
+          .str.replace(",", "", regex=False)
+          .str.strip()
+      )
+      df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
   return df
 
 
@@ -178,7 +176,6 @@ if modulo_principal == "Temporalidades":
         ):
           continue
 
-        # Sumar importe total y unidades totales de todas las columnas de productos para esta tienda
         tot_imp_t = 0.0
         tot_uni_t = 0.0
         c_names = df_temp.columns[1:]
@@ -203,14 +200,13 @@ if modulo_principal == "Temporalidades":
         df_ranking = df_ranking.sort_values(
             by="VENTA TOTAL ($)", ascending=False
         ).reset_index(drop=True)
-        df_ranking.index = df_ranking.index + 1  # Ranking desde 1
+        df_ranking.index = df_ranking.index + 1
 
         fmt_rank = {
             "VENTA TOTAL ($)": "{:,.2f}",
             "UNIDADES TOTALES": "{:,.2f}",
         }
 
-        # Resaltar la fila de City Market Santa Fe si está en el ranking
         def highlight_santa_fe(row):
           if "SANTA FE" in str(row["TIENDA"]).upper():
             return [
