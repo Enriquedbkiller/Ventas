@@ -43,21 +43,19 @@ def load_data(file_name):
     st.error(f"Error al cargar el archivo {file_name}: {e}")
     return pd.DataFrame()
 
-  # Detectar y renombrar columnas de forma robusta
-  new_cols = {}
+  rename_map = {}
   for col in df.columns:
-    c_lower = str(col).strip().lower()
-    if "divis" in c_lower:
-      new_cols[col] = "División"
-    elif "secc" in c_lower:
-      new_cols[col] = "Sección"
-    elif "prod" in c_lower:
-      new_cols[col] = "Producto"
-  df = df.rename(columns=new_cols)
+    col_clean = str(col).strip()
+    col_lower = col_clean.lower()
+    if "secc" in col_lower:
+      rename_map[col] = "Sección"
+    elif "prod" in col_lower:
+      rename_map[col] = "Producto"
+  df = df.rename(columns=rename_map)
 
-  if "División" in df.columns:
+  if "Sección" in df.columns:
     df = df[
-        df["División"]
+        df["Sección"]
         .astype(str)
         .str.contains("Total general", case=False, na=False)
         == False
@@ -105,11 +103,7 @@ st.title("📊 Tablero Gerencial - City Market Santa Fe")
 st.markdown("### 🗂️ Módulo de Consulta")
 modulo_principal = st.radio(
     "Selecciona Módulo",
-    [
-        "Ventas (División / Sección / Producto)",
-        "Clientes y Ticket Promedio",
-        "Temporalidades",
-    ],
+    ["Ventas (Sección / Producto)", "Clientes y Ticket Promedio", "Temporalidades"],
     horizontal=True,
 )
 
@@ -135,21 +129,31 @@ if modulo_principal == "Temporalidades":
         "Selecciona la Campaña / Temporalidad:", archivos_temporada
     )
 
-    try:
-      df_raw = pd.read_csv(
-          campana_seleccionada, encoding="utf-16", sep="\t", header=None
-      )
-    except Exception:
+    # Cargar archivo de temporada detectando el separador correcto (coma o tabulación)
+    df_raw = None
+    for enc in ["utf-16", "utf-8", "latin1"]:
       try:
         df_raw = pd.read_csv(
-            campana_seleccionada, encoding="utf-8", sep="\t", header=None
+            campana_seleccionada, encoding=enc, sep=",", header=None
         )
+        if len(df_raw.columns) > 2:
+          break
       except Exception:
-        df_raw = pd.read_csv(
-            campana_seleccionada, encoding="latin1", header=None
-        )
+        try:
+          df_raw = pd.read_csv(
+              campana_seleccionada, encoding=enc, sep="\t", header=None
+          )
+          if len(df_raw.columns) > 2:
+            break
+        except Exception:
+          continue
 
-    if len(df_raw) > 2:
+    if df_raw is None or len(df_raw) <= 2:
+      st.error(
+          "No se pudo leer correctamente la estructura del archivo de"
+          " temporada."
+      )
+    else:
       row_prod = df_raw.iloc[1].values
       row_metric = df_raw.iloc[2].values
 
@@ -517,7 +521,7 @@ elif modulo_principal == "Clientes y Ticket Promedio":
     st.dataframe(styled_tic, use_container_width=True)
 
 else:
-  # --- MÓDULO DE VENTAS (División, Sección, Producto) ---
+  # --- MÓDULO DE VENTAS (Sección, Producto) ---
   st.markdown("### 📅 Tipo de Reporte de Venta")
   tipo_reporte = st.radio(
       "Reporte", ["Acumulada", "Diaria", "Ambas"], horizontal=True
@@ -531,7 +535,7 @@ else:
     st.write("**Nivel de Visualización**")
     nivel = st.radio(
         "Selecciona nivel",
-        ["División", "Sección", "Producto"],
+        ["Sección", "Producto"],
         horizontal=True,
         label_visibility="collapsed",
     )
@@ -556,33 +560,10 @@ else:
 
   ascending_order = True if "Decremento" in orden_tipo else False
 
-  tipo_participacion = None
-  if nivel in ["División", "Sección"]:
-    st.markdown("<br>", unsafe_allow_html=True)
-    col_p1, col_p2 = st.columns([2, 4])
-    with col_p1:
-      st.write("**Base para cálculo de Participación**")
-      if nivel == "División":
-        st.info("ℹ️ En nivel División, la participación es sobre la Venta Total.")
-        tipo_participacion = "Sobre Venta Total de la Tienda"
-      else:
-        tipo_participacion = st.radio(
-            "Participación sobre:",
-            ["Sobre Venta Total de la Tienda", "Sobre la División"],
-            horizontal=True,
-            label_visibility="collapsed",
-        )
-
-  filtro_seleccionado = "Todas"
-
-  if nivel == "Sección":
-    lista_divisiones = sorted(df_acumulada["División"].dropna().unique())
-    filtro_seleccionado = st.selectbox(
-        "Filtrar por División:", ["Todas"] + list(lista_divisiones)
-    )
-  elif nivel == "Producto":
+  filtro_seccion = "Todas"
+  if nivel == "Producto":
     lista_secciones = sorted(df_acumulada["Sección"].dropna().unique())
-    filtro_seleccionado = st.selectbox(
+    filtro_seccion = st.selectbox(
         "Filtrar por Sección para ver Productos:",
         ["Todas"] + list(lista_secciones),
     )
@@ -600,28 +581,22 @@ else:
 
     temp_source = df_source.copy()
     if (
-        nivel == "Sección"
-        and filtro_seleccionado
-        and filtro_seleccionado != "Todas"
-    ):
-      temp_source = temp_source[temp_source["División"] == filtro_seleccionado]
-    elif (
         nivel == "Producto"
-        and filtro_seleccionado
-        and filtro_seleccionado != "Todas"
+        and filtro_seccion
+        and filtro_seccion != "Todas"
     ):
-      temp_source = temp_source[temp_source["Sección"] == filtro_seleccionado]
+      temp_source = temp_source[temp_source["Sección"] == filtro_seccion]
 
     total_tienda_2026 = df_source[col_v26].sum()
     total_tienda_2025 = df_source[col_v25].sum()
 
-    if nivel == "División":
+    if nivel == "Sección":
       df_grouped = (
-          temp_source.groupby("División")
+          temp_source.groupby("Sección")
           .agg({col_v26: "sum", col_v25: "sum"})
           .reset_index()
       )
-      df_grouped.rename(columns={"División": "DIVISIÓN"}, inplace=True)
+      df_grouped.rename(columns={"Sección": "SECCIÓN"}, inplace=True)
       df_grouped["Part. 2026 (%)"] = (
           df_grouped[col_v26] / total_tienda_2026 * 100
           if total_tienda_2026 > 0
@@ -633,65 +608,24 @@ else:
           else 0
       )
 
-    elif nivel == "Sección":
-      df_grouped = (
-          temp_source.groupby(["División", "Sección"])
-          .agg({col_v26: "sum", col_v25: "sum"})
-          .reset_index()
-      )
-      df_grouped.rename(
-          columns={"División": "DIVISIÓN", "Sección": "SECCIÓN"}, inplace=True
-      )
-
-      if tipo_participacion == "Sobre la División":
-        div_totales = (
-            df_source.groupby("División")
-            .agg({col_v26: "sum", col_v25: "sum"})
-            .reset_index()
-        )
-        div_totales.rename(
-            columns={
-                "División": "DIVISIÓN",
-                col_v26: "div_26",
-                col_v25: "div_25",
-            },
-            inplace=True,
-        )
-        df_grouped = df_grouped.merge(div_totales, on="DIVISIÓN", how="left")
-        df_grouped["Part. 2026 (%)"] = df_grouped.apply(
-            lambda r: (r[col_v26] / r["div_26"] * 100) if r["div_26"] > 0 else 0,
-            axis=1,
-        )
-        df_grouped["Part. 2025 (%)"] = df_grouped.apply(
-            lambda r: (r[col_v25] / r["div_25"] * 100) if r["div_25"] > 0 else 0,
-            axis=1,
-        )
-        df_grouped.drop(columns=["div_26", "div_25"], inplace=True)
-      else:
-        df_grouped["Part. 2026 (%)"] = (
-            df_grouped[col_v26] / total_tienda_2026 * 100
-            if total_tienda_2026 > 0
-            else 0
-        )
-        df_grouped["Part. 2025 (%)"] = (
-            df_grouped[col_v25] / total_tienda_2025 * 100
-            if total_tienda_2025 > 0
-            else 0
-        )
-
     else:
       df_grouped = (
-          temp_source.groupby(["División", "Sección", "Producto"])
+          temp_source.groupby(["Sección", "Producto"])
           .agg({col_v26: "sum", col_v25: "sum"})
           .reset_index()
       )
       df_grouped.rename(
-          columns={
-              "División": "DIVISIÓN",
-              "Sección": "SECCIÓN",
-              "Producto": "PRODUCTO",
-          },
-          inplace=True,
+          columns={"Sección": "SECCIÓN", "Producto": "PRODUCTO"}, inplace=True
+      )
+      df_grouped["Part. 2026 (%)"] = (
+          df_grouped[col_v26] / total_tienda_2026 * 100
+          if total_tienda_2026 > 0
+          else 0
+      )
+      df_grouped["Part. 2025 (%)"] = (
+          df_grouped[col_v25] / total_tienda_2025 * 100
+          if total_tienda_2025 > 0
+          else 0
       )
 
     df_grouped["Var $"] = df_grouped[col_v26] - df_grouped[col_v25]
@@ -708,22 +642,9 @@ else:
         columns={col_v26: "Venta 2026", col_v25: "Venta 2025"}, inplace=True
     )
 
-    if nivel == "División":
+    if nivel == "Sección":
       df_grouped = df_grouped[
           [
-              "DIVISIÓN",
-              "Venta 2026",
-              "Part. 2026 (%)",
-              "Venta 2025",
-              "Part. 2025 (%)",
-              "Var $",
-              "Var %",
-          ]
-      ]
-    elif nivel == "Sección":
-      df_grouped = df_grouped[
-          [
-              "DIVISIÓN",
               "SECCIÓN",
               "Venta 2026",
               "Part. 2026 (%)",
@@ -736,11 +657,12 @@ else:
     else:
       df_grouped = df_grouped[
           [
-              "DIVISIÓN",
               "SECCIÓN",
               "PRODUCTO",
               "Venta 2026",
+              "Part. 2026 (%)",
               "Venta 2025",
+              "Part. 2025 (%)",
               "Var $",
               "Var %",
           ]
@@ -750,13 +672,12 @@ else:
 
     format_dict = {
         "Venta 2026": "{:,.2f}",
+        "Part. 2026 (%)": "{:,.2f}%",
         "Venta 2025": "{:,.2f}",
+        "Part. 2025 (%)": "{:,.2f}%",
         "Var $": "{:,.2f}",
         "Var %": "{:,.2f}%",
     }
-    if nivel in ["División", "Sección"]:
-      format_dict["Part. 2026 (%)"] = "{:,.2f}%"
-      format_dict["Part. 2025 (%)"] = "{:,.2f}%"
 
     def color_negative_red(val):
       if isinstance(val, (int, float)) and val < 0:
