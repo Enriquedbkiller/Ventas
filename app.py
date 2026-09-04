@@ -43,21 +43,25 @@ def load_data(file_name):
     st.error(f"Error al cargar el archivo {file_name}: {e}")
     return pd.DataFrame()
 
-  # Normalizar nombres de columnas clave por si tienen variaciones de acentos o mayúsculas
-  rename_map = {}
+  # Detectar y renombrar columnas de forma robusta
+  new_cols = {}
   for col in df.columns:
-    col_clean = col.strip()
-    col_lower = col_clean.lower()
-    if "divis" in col_lower:
-      rename_map[col] = "División"
-    elif "secc" in col_lower:
-      rename_map[col] = "Sección"
-    elif "prod" in col_lower:
-      rename_map[col] = "Producto"
-  df = df.rename(columns=rename_map)
+    c_lower = str(col).strip().lower()
+    if "divis" in c_lower:
+      new_cols[col] = "División"
+    elif "secc" in c_lower:
+      new_cols[col] = "Sección"
+    elif "prod" in c_lower:
+      new_cols[col] = "Producto"
+  df = df.rename(columns=new_cols)
 
   if "División" in df.columns:
-    df = df[df["División"].astype(str).str.contains("Total general", case=False, na=False) == False]
+    df = df[
+        df["División"]
+        .astype(str)
+        .str.contains("Total general", case=False, na=False)
+        == False
+    ]
 
   for col in df.columns:
     if any(
