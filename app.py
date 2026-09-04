@@ -129,7 +129,6 @@ if modulo_principal == "Temporalidades":
         "Selecciona la Campaña / Temporalidad:", archivos_temporada
     )
 
-    # Cargar archivo de temporada detectando el separador correcto (coma o tabulación)
     df_raw = None
     for enc in ["utf-16", "utf-8", "latin1"]:
       try:
@@ -185,7 +184,6 @@ if modulo_principal == "Temporalidades":
           return 0.0
 
 
-      # --- 1. CONSTRUIR RANKING DE TIENDAS ---
       ranking_data = []
       for idx, row in df_temp.iterrows():
         t_name = str(row["Tienda"]).strip()
@@ -244,7 +242,6 @@ if modulo_principal == "Temporalidades":
 
       st.markdown("---")
 
-      # --- 2. DETALLE DE ARTÍCULOS POR TIENDA ---
       lista_tiendas = sorted(df_temp["Tienda"].dropna().unique())
       tienda_elegida = st.selectbox(
           "Selecciona la Tienda para ver Detalle de Artículos:",
@@ -306,7 +303,7 @@ if modulo_principal == "Temporalidades":
             }
         )
         df_resultado_temp = pd.concat(
-            [df_resultado_temp, fila_tot], ignore_index=True
+            [fila_tot, df_resultado_temp], ignore_index=True
         )
 
         fmt_temp = {
@@ -315,16 +312,16 @@ if modulo_principal == "Temporalidades":
         }
 
 
-        def highlight_last_row_temp(row):
-          if row.name == len(df_resultado_temp) - 1:
+        def highlight_first_row_temp(row):
+          if row.name == 0:
             return [
-                "font-weight: bold; background-color: rgba(128,128,128,0.1)"
+                "font-weight: bold; background-color: rgba(128,128,128,0.15)"
             ] * len(row)
           return [""] * len(row)
 
 
         styled_temp = df_resultado_temp.style.format(fmt_temp).apply(
-            highlight_last_row_temp, axis=1
+            highlight_first_row_temp, axis=1
         )
 
         st.markdown(f"#### 🏷️ Desglose de Artículos ({tienda_elegida})")
@@ -406,7 +403,7 @@ elif modulo_principal == "Clientes y Ticket Promedio":
         }
     )
     df_clientes_view = pd.concat(
-        [df_clientes_view, fila_acum_cli], ignore_index=True
+        [fila_acum_cli, df_clientes_view], ignore_index=True
     )
 
     fmt_cli = {
@@ -426,16 +423,16 @@ elif modulo_principal == "Clientes y Ticket Promedio":
     st.markdown("#### 🛒 Clientes por Día")
 
 
-    def highlight_last_row(row):
-      if row.name == len(df_clientes_view) - 1:
+    def highlight_first_row(row):
+      if row.name == 0:
         return [
-            "font-weight: bold; background-color: rgba(128,128,128,0.1)"
+            "font-weight: bold; background-color: rgba(128,128,128,0.15)"
         ] * len(row)
       return [""] * len(row)
 
 
     styled_cli = df_clientes_view.style.format(fmt_cli).apply(
-        highlight_last_row, axis=1
+        highlight_first_row, axis=1
     )
     try:
       styled_cli = styled_cli.map(
@@ -485,7 +482,7 @@ elif modulo_principal == "Clientes y Ticket Promedio":
         }
     )
     df_ticket_view = pd.concat(
-        [df_ticket_view, fila_acum_tic], ignore_index=True
+        [fila_acum_tic, df_ticket_view], ignore_index=True
     )
 
     fmt_tic = {
@@ -498,16 +495,16 @@ elif modulo_principal == "Clientes y Ticket Promedio":
     st.markdown("#### 🧾 Ticket Promedio por Día")
 
 
-    def highlight_last_row_tic(row):
-      if row.name == len(df_ticket_view) - 1:
+    def highlight_first_row_tic(row):
+      if row.name == 0:
         return [
-            "font-weight: bold; background-color: rgba(128,128,128,0.1)"
+            "font-weight: bold; background-color: rgba(128,128,128,0.15)"
         ] * len(row)
       return [""] * len(row)
 
 
     styled_tic = df_ticket_view.style.format(fmt_tic).apply(
-        highlight_last_row_tic, axis=1
+        highlight_first_row_tic, axis=1
     )
     try:
       styled_tic = styled_tic.map(
@@ -642,6 +639,45 @@ else:
         columns={col_v26: "Venta 2026", col_v25: "Venta 2025"}, inplace=True
     )
 
+    # --- AGREGAR FILA DE TOTAL GENERAL AL INICIO ---
+    tot_2026 = df_grouped["Venta 2026"].sum()
+    tot_2025 = df_grouped["Venta 2025"].sum()
+    tot_p26 = df_grouped["Part. 2026 (%)"].sum()
+    tot_p25 = df_grouped["Part. 2025 (%)"].sum()
+    tot_var_s = tot_2026 - tot_2025
+    tot_var_p = (
+        (tot_2026 / tot_2025 * 100) - 100 if tot_2025 != 0 else 0
+    )
+
+    if nivel == "Sección":
+      fila_total = pd.DataFrame(
+          {
+              "SECCIÓN": ["TOTAL GENERAL"],
+              "Venta 2026": [tot_2026],
+              "Part. 2026 (%)": [tot_p26],
+              "Venta 2025": [tot_2025],
+              "Part. 2025 (%)": [tot_p25],
+              "Var $": [tot_var_s],
+              "Var %": [tot_var_p],
+          }
+      )
+    else:
+      fila_total = pd.DataFrame(
+          {
+              "SECCIÓN": ["TOTAL GENERAL"],
+              "PRODUCTO": [""],
+              "Venta 2026": [tot_2026],
+              "Part. 2026 (%)": [tot_p26],
+              "Venta 2025": [tot_2025],
+              "Part. 2025 (%)": [tot_p25],
+              "Var $": [tot_var_s],
+              "Var %": [tot_var_p],
+          }
+      )
+
+    # Unir colocando la fila de totales arriba
+    df_grouped = pd.concat([fila_total, df_grouped], ignore_index=True)
+
     if nivel == "Sección":
       df_grouped = df_grouped[
           [
@@ -668,8 +704,6 @@ else:
           ]
       ]
 
-    df_grouped = df_grouped.sort_values(by="Var $", ascending=ascending_order)
-
     format_dict = {
         "Venta 2026": "{:,.2f}",
         "Part. 2026 (%)": "{:,.2f}%",
@@ -684,16 +718,25 @@ else:
         return "color: #ff4d4d; font-weight: bold;"
       return ""
 
+    def highlight_first_row(row):
+      if row.name == 0:
+        return [
+            "font-weight: bold; background-color: rgba(128,128,128,0.15)"
+        ] * len(row)
+      return [""] * len(row)
+
     cols_to_colorize = ["Var $", "Var %"]
     try:
       styled_df = (
           df_grouped.style.format(format_dict)
           .map(color_negative_red, subset=cols_to_colorize)
+          .apply(highlight_first_row, axis=1)
       )
     except AttributeError:
       styled_df = (
           df_grouped.style.format(format_dict)
           .applymap(color_negative_red, subset=cols_to_colorize)
+          .apply(highlight_first_row, axis=1)
       )
 
     st.subheader(titulo_tabla)
